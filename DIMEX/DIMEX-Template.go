@@ -22,7 +22,6 @@ package DIMEX
 import (
 	PP2PLink "SD/PP2PLink"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 )
@@ -208,22 +207,22 @@ func (module *DIMEX_Module) handleUponDeliverReqEntry(msgOutro PP2PLink.PP2PLink
 		        				então  postergados := postergados + [p, r ]
 		     					lts.ts := max(lts.ts, rts.ts)
 	*/
-	if module.st == noMX || (module.st == wantMX && before(module.id, module.reqTs, msgOutro.From, module.reqTs)) {
-		module.sendToLink(module.addresses[msgOutro.From], "respOK,"+strconv.Itoa(module.id), "")
+	msgOutroSplit := strings.Split(msgOutro.Message, ",")
+	msgOutroId, _ := strconv.Atoi(msgOutroSplit[1])
+	msgOutroTs, _ := strconv.Atoi(msgOutroSplit[2])
+	if module.st == noMX || (module.st == wantMX && module.reqTs > msgOutroTs) {
+		module.sendToLink(module.addresses[msgOutroId], "respOK,"+strconv.Itoa(module.id), "")
 	} else {
-		module.waiting[msgOutro.From] = true
+		if module.st == inMX || (module.st == wantMX && module.reqTs < msgOutroTs) {
+			module.waiting[msgOutroId] = true
+		}
 	}
-	module.lcl = max(module.lcl, msgOutro.Ts)
+	module.lcl, _ = max(module.lcl, msgOutroTs)
 }
-
-
-// ------------------------------------------------------------------------------------
-// ------- funcoes de ajuda
-// ------------------------------------------------------------------------------------
 
 func (module *DIMEX_Module) sendToLink(address string, content string, space string) {
 	module.outDbg(space + " ---->>>>   to: " + address + "     msg: " + content)
-	module.Pp2plink.Req <- PP2PLink.PP2PLink_Req_Message{
+	module.Pp2plink.Req <- PP2PLink.PP2PLink_Req_Message{	 
 		To:      address,
 		Message: content}
 }
@@ -236,6 +235,13 @@ func before(oneId, oneTs, othId, othTs int) bool {
 	} else {
 		return oneId < othId
 	}
+}
+
+func max(a, b int) (int, int) {
+	if a > b {
+		return a, a
+	}
+	return b, b
 }
 
 func (module *DIMEX_Module) outDbg(s string) {
