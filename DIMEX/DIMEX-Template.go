@@ -206,16 +206,17 @@ func (module *DIMEX_Module) handleUponDeliverReqEntry(msgOutro PP2PLink.PP2PLink
 		        				então  postergados := postergados + [p, r ]
 		     					lts.ts := max(lts.ts, rts.ts)
 	*/
-	msgOutroSplit := strings.Split(msgOutro.Message, ",")
-	otherId, _ := strconv.Atoi(msgOutroSplit[1])
-	otherTs, _ := strconv.Atoi(msgOutroSplit[2])
-
-	if module.st == noMX || (module.st == wantMX && module.reqTs > otherTs) {
+	msg := strings.Split(msgOutro.Message, ",")
+	otherId, _ := strconv.Atoi(msg[1])
+	otherTs, _ := strconv.Atoi(msg[2])
+	if module.st == noMX || (module.st == wantMX && before(module.id, module.reqTs, otherId, otherTs)) {
 		module.sendToLink(module.addresses[otherId], "respOK,"+strconv.Itoa(module.id), "")
 	} else {
-		module.waiting[otherId] = true
+		if module.st == wantMX && before(otherId, otherTs, module.id, module.reqTs) {
+			module.waiting[otherId] = true
+		}
+		module.lcl, module.reqTs = max(module.lcl, otherTs)
 	}
-	module.lcl, _ = max(module.lcl, otherTs)
 }
 
 func (module *DIMEX_Module) sendToLink(address string, content string, space string) {
