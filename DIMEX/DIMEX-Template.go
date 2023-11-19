@@ -143,26 +143,14 @@ func (module *DIMEX_Module) handleUponReqEntry() {
 							trigger [ pl , Send | [ reqEntry, r, myTs ]
 		    			estado := queroSC
 	*/
-
-	module.outDbg("Handling request entry from app")
 	module.lcl++
 	module.reqTs = module.lcl
 	module.nbrResps = 0
 
-	// Envio de pedidos de entrada para todos os processos
 	for i := 0; i < len(module.addresses); i++ {
 		module.sendToLink(module.addresses[i], "reqEntry,"+strconv.Itoa(module.id)+","+strconv.Itoa(module.reqTs), "")
 	}
-
-	// Aguarda respostas suficientes antes de entrar na seção crítica
-	for module.nbrResps < len(module.addresses)-1 {
-		<-module.Pp2plink.Ind
-		module.nbrResps++
-	}
-
-	module.Ind <- dmxResp{} // Indica à aplicação que pode entrar na seção crítica
-	module.st = inMX
-	module.outDbg("Entered mutual exclusion")
+	module.st = wantMX
 }
 
 func (module *DIMEX_Module) handleUponReqExit() {
@@ -183,10 +171,11 @@ func (module *DIMEX_Module) handleUponReqExit() {
 	}
 
 	module.st = noMX
-	module.outDbg("Released mutual exclusion")
 
 	// Limpa a lista de processos esperando
-	module.waiting = make([]bool, len(module.addresses))
+	for i := 0; i < len(module.addresses); i++ {
+		module.waiting[i] = false
+	}
 }
 
 // ------------------------------------------------------------------------------------
@@ -204,16 +193,12 @@ func (module *DIMEX_Module) handleUponDeliverRespOk(msgOutro PP2PLink.PP2PLink_I
 		  					    estado := estouNaSC
 
 	*/
-	module.outDbg("Handling response OK from another process")
 	module.nbrResps++
 
 	// Verifica se todas as respostas foram recebidas
 	if module.nbrResps == len(module.addresses)-1 {
 		module.Ind <- dmxResp{} // Indica à aplicação que pode entrar na seção crítica
 		module.st = inMX
-		module.outDbg("All responses received, entering mutual exclusion")
-	} else {
-		module.outDbg(fmt.Sprint("Waiting for more responses. Received:", module.nbrResps, "Expected:", len(module.addresses)-1))
 	}
 }
 
@@ -234,17 +219,15 @@ func (module *DIMEX_Module) handleUponDeliverReqEntry(msgOutro PP2PLink.PP2PLink
 	msgOutroSplit := strings.Split(msgOutro.Message, ",")
 	otherId, _ := strconv.Atoi(msgOutroSplit[1])
 	otherTs, _ := strconv.Atoi(msgOutroSplit[2])
-	module.outDbg(fmt.Sprintf("Received request entry from Process %d with timestamp %d", otherId, otherTs))
 
-	if module.st == noMX || (module.st == wantMX && before(module.id, module.reqTs, otherId, otherTs)) {
+	if module.st == noMX || (module.st == wantMX && module.reqTs > otherTs) {
 		module.sendToLink(module.addresses[otherId], "respOK,"+strconv.Itoa(module.id), "")
-		module.outDbg("Sent response OK because I don't want the mutual exclusion or my timestamp is greater")
 	} else {
-		module.waiting[otherId] = true
-		module.outDbg(fmt.Sprint("Added Process ", otherId, " to waiting list"))
-	}
+		if module.st == inMX || (module.st == wantMX && module.reqTs < otherTs) {
+			module.waiting[otherId] = true
+		}
 	module.lcl, _ = max(module.lcl, otherTs)
-	module.outDbg("Handled request entry from another process")
+	}
 }
 
 func (module *DIMEX_Module) sendToLink(address string, content string, space string) {
