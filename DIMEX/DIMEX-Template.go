@@ -146,7 +146,6 @@ func (module *DIMEX_Module) handleUponReqEntry() {
 	module.lcl++
 	module.reqTs = module.lcl
 	module.nbrResps = 0
-
 	for i := 0; i < len(module.addresses); i++ {
 		module.sendToLink(module.addresses[i], "reqEntry,"+strconv.Itoa(module.id)+","+strconv.Itoa(module.reqTs), "")
 	}
@@ -161,19 +160,13 @@ func (module *DIMEX_Module) handleUponReqExit() {
 		    				estado := naoQueroSC
 							waiting := {}
 	*/
-	module.outDbg("Handling request exit from app")
-
-	// Envia respostas de saída para todos os processos que estão esperando
-	for i := 0; i < len(module.addresses); i++ {
+	for i := 0; i < len(module.waiting); i++ {
 		if module.waiting[i] {
 			module.sendToLink(module.addresses[i], "respOK,"+strconv.Itoa(module.id), "")
 		}
 	}
-
 	module.st = noMX
-
-	// Limpa a lista de processos esperando
-	for i := 0; i < len(module.addresses); i++ {
+	for i := 0; i < len(module.waiting); i++ {
 		module.waiting[i] = false
 	}
 }
@@ -194,10 +187,8 @@ func (module *DIMEX_Module) handleUponDeliverRespOk(msgOutro PP2PLink.PP2PLink_I
 
 	*/
 	module.nbrResps++
-
-	// Verifica se todas as respostas foram recebidas
 	if module.nbrResps == len(module.addresses)-1 {
-		module.Ind <- dmxResp{} // Indica à aplicação que pode entrar na seção crítica
+		module.Ind <- dmxResp{}
 		module.st = inMX
 	}
 }
@@ -215,7 +206,6 @@ func (module *DIMEX_Module) handleUponDeliverReqEntry(msgOutro PP2PLink.PP2PLink
 		        				então  postergados := postergados + [p, r ]
 		     					lts.ts := max(lts.ts, rts.ts)
 	*/
-	module.outDbg("Handling request entry from another process")
 	msgOutroSplit := strings.Split(msgOutro.Message, ",")
 	otherId, _ := strconv.Atoi(msgOutroSplit[1])
 	otherTs, _ := strconv.Atoi(msgOutroSplit[2])
@@ -223,11 +213,9 @@ func (module *DIMEX_Module) handleUponDeliverReqEntry(msgOutro PP2PLink.PP2PLink
 	if module.st == noMX || (module.st == wantMX && module.reqTs > otherTs) {
 		module.sendToLink(module.addresses[otherId], "respOK,"+strconv.Itoa(module.id), "")
 	} else {
-		if module.st == inMX || (module.st == wantMX && module.reqTs < otherTs) {
-			module.waiting[otherId] = true
-		}
-	module.lcl, _ = max(module.lcl, otherTs)
+		module.waiting[otherId] = true
 	}
+	module.lcl, _ = max(module.lcl, otherTs)
 }
 
 func (module *DIMEX_Module) sendToLink(address string, content string, space string) {
