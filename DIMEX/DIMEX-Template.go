@@ -215,7 +215,7 @@ func (module *DIMEX_Module) handleUponDeliverReqEntry(msgOutro PP2PLink.PP2PLink
 		if module.st == wantMX && before(otherId, otherTs, module.id, module.reqTs) {
 			module.waiting[otherId] = true
 		}
-		module.lcl, module.reqTs = max(module.lcl, otherTs)
+		module.lcl = max(module.lcl, otherTs)
 	}
 }
 
@@ -237,11 +237,11 @@ func before(oneId, oneTs, othId, othTs int) bool {
 	}
 }
 
-func max(a, b int) (int, int) {
+func max(a, b int) (int) {
 	if a > b {
-		return a, a
+		return a
 	}
-	return b, b
+	return b
 }
 
 func (module *DIMEX_Module) outDbg(s string) {
